@@ -2,7 +2,9 @@
 title: "R flow Protocol"
 author: "Ephraim Craddock"
 date: "2025-06-03"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ## Overview
@@ -15,7 +17,7 @@ Please run all cells subsequently
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-This package was built in version 4.5.0 You can check your current version by running the cell below. If it’s older than 4.4.0, certain packages (e.g., Rtools) may not work properly.
+This script was built in version 4.5.0 You can check your current version by running the cell below. If it’s older than 4.4.0, certain packages (e.g., Rtools) may not work properly.
 
 ```{r}
 R.version.string
@@ -32,28 +34,6 @@ library(dplyr)
 
 #install.packages("here")
 #here::here()
-```
-
-```{r}
-transpose_df <- function(df) {
-  # Extract new column names from the first column (including header)
-  new_colnames <- c(names(df)[1], as.character(df[[1]]))
-  
-  # Remove the first column
-  df_no_first <- df[,-1, drop = FALSE]
-  
-  # Transpose the data frame
-  transposed <- as.data.frame(t(df_no_first), stringsAsFactors = FALSE)
-  
-  # Assign the new column names
-  colnames(transposed) <- new_colnames[-1]  # Exclude header for colnames
-  
-  # Set old column names as rownames
-  rownames(transposed) <- names(df)[-1]
-  
-  return(transposed)
-}
-
 ```
 
 ##Set Up
@@ -288,7 +268,7 @@ The function uses a count volume (μL), which is the volume of cells you have pr
 ```{r Count attempt using a function}
 StainCalc <- function(count_vol = 50, sample_df = sample_info){
   total_cells <- sample_df$PreStain_Counts * count_vol
-  sample_df$Total_Cells_millions = total_cells/1e6 #Count vol is in μL
+  #sample_df$Total_Cells_millions = total_cells/1e6 #Count vol is in μL
   sample_df$ml_Vol_Resuspend = total_cells/1e4
   return(sample_df)
 }
@@ -297,12 +277,12 @@ StainCalc()
 
 ## Live Dead
 
-This is to calcμLate the Live/Dead staining. It makes a 25% excess to be safe. Specify a dilution, such as 0.001, which is the default if no dilution is provided. Also specify if the incubation is at room tempertaure or not. The function provides a binary option between room temperature and 4 degrees Celsius for the incubation period, with room temperature as the defaμLt if no input is provided.
+This is to calcμLate the Live/Dead staining. It makes an excess to be safe, with the default excess amount as 25%. Specify a dilution, such as 0.001, which is the default if no dilution is provided. Also specify if the incubation is at room tempertaure or not. The function provides a binary option between room temperature and 4 degrees Celsius for the incubation period, with room temperature as the defaμLt if no input is provided.
 
 Make sure all above chunks have been run. Below, one chunk is the function and another contains the function to change in order to get desired outputs.
 
 ```{r}
-Live_Dead <- function(dilution = .001, RT=T){#Possibly need to calcμLate dilution based on stain rather than vice versa
+Live_Dead <- function(dilution = .001, RT=T, excess_percent = .25){
   inc_time <- 0 
   inc_temp <- ""
   if (RT == T){
@@ -313,7 +293,12 @@ Live_Dead <- function(dilution = .001, RT=T){#Possibly need to calcμLate diluti
    inc_temp <- "4 C"
  }
   
-MMX <- nrow(cells.data)*1.25 
+  if (excess_percent<1){
+ excess <- (excess_percent+1)*nrow(sample_info)
+ }else if(excess_percent > 1 | excess_percent < 100){
+  excess<- (1+(excess_percent/100))*nrow(sample_info)}
+  
+MMX <<- excess 
 ld_total <- MMX*StainVol
 ld_add <- ld_total*dilution
 
@@ -330,7 +315,7 @@ cat("\n Incubate at", inc_temp, "for", inc_time, "minutes" )}
 ```
 
 ```{r}
-Live_Dead(dilution = 0.001, RT = T)
+Live_Dead(dilution = 0.001, RT = T, excess_percent = .25)
 ```
 
 ## FC Block
@@ -339,7 +324,7 @@ Live_Dead(dilution = 0.001, RT = T)
 -   Incubation time of 20 min
 -   Incubation temp of 4C
 
-This aids in making the FC Block Master Mix. Put in the current stock concentration and final concentration. Again, it makes a 25% excess. Use FACS buffer as a diluent to the FC Block. Then, when done, let it incubate at 4 degrees Celsius for 20 minutes.
+This aids in making the FC Block Master Mix. Put in the current stock concentration and final concentration. Again, it makes an excess in the same manner as before. Use FACS buffer as a diluent to the FC Block. Then, when done, let it incubate at 4 degrees Celsius for 20 minutes. The values "9.3" and "0.01" are placeholder values, so feel free to change these to match the stock and final concentrations your experiment needs.
 
 ```{r}
 StockConc <- 9.3 #mg/ml
@@ -352,7 +337,7 @@ cat("\n Add",StainVol,"μL/ml to each sample")
 
 ## Function for cell stains
 
-Creates a table to aid in surface staining. It will only display the antibodies that are for surface staining. The first chunk initializes the function and the second chunks runs the function.
+Creates a table to aid in surface staining. It will only display the antibodies that are for surface staining.
 
 ```{r Function for Cell Stain}
 wait <- 15  #Just asigns these as global variables so they can be modified and then called not in a whole function context
@@ -368,8 +353,8 @@ stain_mm <- function(panel = stain_panel, RT=T,Surface =T){
    wait <<- 60
    temp <<- "4 C"
  } #Sets incubation time depening on temp. DefaμLt is room temp, otherwise is 4 C
-  panel <- filter(panel, Surface_Marker = Surface)
-  
+  panel <- filter(panel, Surface_Marker == Surface)
+
   vol_add <- c() # Initialize empty vector to store stain volumes
   vol_false <- c() #Initilaize empty vector to store which rows are false
   if (Surface == T){
@@ -380,9 +365,8 @@ stain_mm <- function(panel = stain_panel, RT=T,Surface =T){
     }else {
       vol_false <- append(vol_false, i)}}
   
-  # Add column to the panel
-  panel$Surface_Stain_μL <- vol_add
-  panel <- panel[-vol_false,-which(colnames(panel) == "Surface")]
+  #Add column to the panel
+  panel$Surface_Stain_uL <- vol_add
   diluent <- total - sum(vol_add)
   panel <- rbind(panel, c("FACs","N/A", "N/A",diluent))
   }
@@ -398,25 +382,19 @@ stain_mm <- function(panel = stain_panel, RT=T,Surface =T){
     }}
   
   # Add column to the panel
-  panel <- panel[vol_false, -which(colnames(panel) == "Surface")]
-  panel$Intracell_Stain_μL <- vol_add
+  panel$Intracell_Stain_uL <- vol_add
   diluent <- total - sum(vol_add)
   panel <- rbind(panel, c("Perm Buffer","N/A","N/A", diluent))
   }
-  
-
-  
-  print(panel)
-  
+    print(panel[, -c(3,4,5,7)])
 }
-  
+ 
+
+stain_mm()
+ 
 ```
 
 Surface Stains - Incubation time and temp: 1 hr at 4C
-
-```{r}
-stain_mm()
-```
 
 ## Fix/Perm
 
