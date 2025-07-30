@@ -183,7 +183,7 @@ print(sample_info)
 This is optional for if you wish to perform an enrichment step. It takes in the reagent, the number of ul to add of the reagent per 10 million cells and the excess percent of of the reagent you want to add to the Master Mix. There are two functions, one for the count of every sample, and another for when only one sample per condition had a count performed on it. Both will provide a data frame that efficiently provides exact values to add to each sample.
 
 ```{r enrich all counts}
-enrich_all_counts <- function(reagent, ul_per_10million, excess_percent) {
+enrich_all_counts <- function(reagent, ul_per_10million, excess_percent= .25) {
   add_amounts <- sample_info$Total_10Million_Cells * ul_per_10million
   total <- sum(add_amounts)
 
@@ -210,13 +210,20 @@ enrich_all_counts <- function(reagent, ul_per_10million, excess_percent) {
 
   return(reagent_row)
 }
+buffer <- enrich_all_counts("buffer",40, 20)
+biotin_ab<- enrich_all_counts("biotin ab",10,.20)
+buffer_pt2 <- enrich_all_counts("buffer pt2",30,25)
+ab_micro <- enrich_all_counts("ab microbeads",20,25)
 
+buffer_ab <- buffer+biotin_ab
+rownames(buffer_ab) <- "buffer + ab"
 
-data.frame(t(rbind(enrich_all_counts("buffer",40, 20),
-enrich_all_counts("biotin ab",10,.20),
-enrich_all_counts("buffer pt2",30,25),
-enrich_all_counts("ab microbeads",20,25))))
+buffer_ab2 <- buffer_pt2+ab_micro
+rownames(buffer_ab2) <- "buffer + ab pt2"
+
+data.frame(t(rbind(buffer, biotin_ab, buffer_ab, buffer_pt2, ab_micro, buffer_ab2)))
 ```
+
 
 ```{r enrich single count}
 enrich_single_count <- function( 
@@ -251,8 +258,10 @@ return(reagent_row)
 test2 <- build_panel(
 enrich_single_count("buffer",40,25),
 enrich_single_count("biotin ab",10,.20),
+enrich_single_count("buffer+ab",50,.20),
 enrich_single_count("buffer pt2",30,25),
-enrich_single_count("ab microbeads",20,25))
+enrich_single_count("ab microbeads",20,25),
+enrich_single_count("buffer+ab pt2",50,25))
 print(test2)
             
 ```
